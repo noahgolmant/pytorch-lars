@@ -33,9 +33,12 @@ def add_train_args(parser):
                         help='SGD weight decay')
     parser.add_argument('--cuda', action='store_true',
                         help='if True, use GPU for training')
+    parser.add_argument('--max_samples_per_gpu', default=512,
+                        type=int, help='max number of images per GPU')
 
 
-def train(trainloader, model, criterion, optimizer, epoch, cuda=False):
+def train(trainloader, model, criterion, optimizer, epoch, cuda=False,
+          num_chunks=4):
     # switch to train mode
     model.train()
 
@@ -46,22 +49,33 @@ def train(trainloader, model, criterion, optimizer, epoch, cuda=False):
     top5 = AverageMeter()
     end = time.time()
 
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
+    for batch_idx, (all_inputs, all_targets) in enumerate(trainloader):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        if cuda:
-            inputs, targets = inputs.cuda(), targets.cuda(async=True)
+        # do mini-mini-batching for large batch sizes
+        xs = all_inputs.chunk(num_chunks)
+        ys = all_targets.chunk(num_chunks)
 
-        # compute output
-        outputs = model(inputs)
-        loss = criterion(outputs, targets)
+        loss = None
+        for (inputs, targets) in zip(xs, ys):
+            if cuda:
+                inputs, targets = inputs.cuda(), targets.cuda(async=True)
 
-        # measure accuracy and record loss
-        prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
-        losses.update(loss.item(), inputs.size(0))
-        top1.update(prec1.item(), inputs.size(0))
-        top5.update(prec5.item(), inputs.size(0))
+            # compute output
+            outputs = model(inputs)
+            mini_loss = criterion(outputs, targets) / num_chunks
+            if loss:
+                loss += mini_loss
+            else:
+                loss = mini_loss
+
+            # measure accuracy and record loss
+            prec1, prec5 = accuracy(outputs.data, targets.data, topk=(1, 5))
+
+            losses.update(num_chunks * mini_loss.item(), inputs.size(0))
+            top1.update(prec1.item(), inputs.size(0))
+            top5.update(prec5.item(), inputs.size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -145,6 +159,8 @@ def do_training(args):
     num_params = sum(p.numel() for p in model.parameters())
     track.metric(iteration=0, num_params=num_params)
 
+    num_chunks = max(1, args.batch_size // args.max_samples_per_gpu)
+
     optimizer = build_optimizer(args.optimizer, params=model.parameters(),
                                 lr=args.lr,
                                 momentum=args.momentum,
@@ -158,7 +174,8 @@ def do_training(args):
     for epoch in range(args.epochs):
         track.debug("Starting epoch %d" % epoch)
         train_loss, train_acc = train(trainloader, model, criterion,
-                                      optimizer, epoch, args.cuda)
+                                      optimizer, epoch, args.cuda,
+                                      num_chunks=num_chunks)
         test_loss, test_acc = test(testloader, model, criterion, epoch,
                                    args.cuda)
         track.debug('Finished epoch %d... | train loss %.3f | train acc %.3f '
