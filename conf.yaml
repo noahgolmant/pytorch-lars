@@ -1,0 +1,7 @@
+arch: ResNet18
+dataset: cifar10
+batch_size:
+  grid_search: [64, 256, 1024, 4096, 16384]
+cuda: true  
+optimizer: LARS
+max_samples_per_gpu: 512
