@@ -77,7 +77,7 @@ class LARS(Optimizer):
                 grad_norm = torch.norm(d_p)
 
                 # Global LR computed on polynomial decay schedule
-                global_lr = lr * (1 - float(epoch) / max_epoch)
+                global_lr = lr * ((1 - float(epoch) / max_epoch) ** 2)
 
                 # Compute local learning rate
                 local_lr = eta * weight_norm / (grad_norm + weight_decay * weight_norm)
@@ -89,7 +89,7 @@ class LARS(Optimizer):
                     buf = param_state['momentum_buffer'] = torch.zeros_like(p.data)
                 else:
                     buf = param_state['momentum_buffer']
-                buf.mul_(momentum).add_(-actual_lr, d_p + weight_decay * p.data)
-                p.data.add_(buf)
+                buf.mul_(momentum).add_(actual_lr, d_p + weight_decay * p.data)
+                p.data.add_(-buf)
 
         return loss
