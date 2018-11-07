@@ -17,10 +17,10 @@ I just tested this using a ResNet18 on CIFAR-10. I used a standard [gradient acc
 
 | Batch Size | Test Accuracy |
 | ---------- | ------------- |
-|    64      |    89.97      |
-|    256     |    86.59      |
-|    1024    |    83.05      |
-|    4096    | 76.92         |
-| 16384      | 68.33         |
+|    64      |    89.39      |
+|    256     |    85.45      |
+|    1024    |    81.2       |
+|    4096    | 73.41         |
+| 16384      | 64.13         |
 
 As a comparison, using SGD with momentum, I am able to achieve about 93.5% test accuracy in 200 epochs using a geometric decay schedule (using [this](https://github.com/kuangliu/pytorch-cifar) implementation). I have not done extensive hyperparameter tuning, though -- I used the default parameters suggested by the paper. I had a base learning rate of 0.1, 200 epochs, eta .001, momentum 0.9, weight decay of 5e-4, and the polynomial learning rate decay schedule.
