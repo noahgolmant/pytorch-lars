@@ -11,7 +11,7 @@ It uses [skeletor-ml](https://github.com/noahgolmant/skeletor) for experiment lo
 
 ## Preliminary results
 
-I just tested this using a ResNet18 on CIFAR-10. eo test on very large batch sizes, I used a standard [gradient accumulation trick](https://medium.com/huggingface/training-larger-batches-practical-tips-on-1-gpu-multi-gpu-distributed-setups-ec88c3e51255).
+I just tested this using a ResNet18 on CIFAR-10. I used a standard [gradient accumulation trick](https://medium.com/huggingface/training-larger-batches-practical-tips-on-1-gpu-multi-gpu-distributed-setups-ec88c3e51255) to train on very large batch sizes.
 
 ![Alt text](images/lars_test_curves.jpg?raw=true "Title")
 
