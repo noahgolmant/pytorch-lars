@@ -1,13 +1,10 @@
 """ Layer-wise adaptive rate scaling for SGD in PyTorch! """
 import torch
-from torch.optim import SGD
 from torch.optim.optimizer import Optimizer, required
 
 
 class LARS(Optimizer):
     r"""Implements layer-wise adaptive rate scaling for SGD.
-
-    Based on Algorithm 1 in https://arxiv.org/abs/1708.03888
 
     Args:
         params (iterable): iterable of parameters to optimize or dicts defining
@@ -19,13 +16,16 @@ class LARS(Optimizer):
         eta (float, optional): LARS coefficient
         max_epoch: maximum training epoch to determine polynomial LR decay.
 
+    Based on Algorithm 1 of the following paper by You, Gitman, and Ginsburg.
+    Large Batch Training of Convolutional Networks:
+        https://arxiv.org/abs/1708.03888
+
     Example:
-        >>> optimizer = LARS(model.parameters(), lr=0.1, momentum=0.9)
+        >>> optimizer = LARS(model.parameters(), lr=0.1, eta=1e-3)
         >>> optimizer.zero_grad()
         >>> loss_fn(model(input), target).backward()
         >>> optimizer.step()
     """
-
     def __init__(self, params, lr=required, momentum=.9,
                  weight_decay=.0005, eta=0.001, max_epoch=200):
         if lr is not required and lr < 0.0:
@@ -33,31 +33,33 @@ class LARS(Optimizer):
         if momentum < 0.0:
             raise ValueError("Invalid momentum value: {}".format(momentum))
         if weight_decay < 0.0:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+            raise ValueError("Invalid weight_decay value: {}"
+                             .format(weight_decay))
         if eta < 0.0:
             raise ValueError("Invalid LARS coefficient value: {}".format(eta))
 
+        self.epoch = 0
         defaults = dict(lr=lr, momentum=momentum,
                         weight_decay=weight_decay,
-                        eta=eta, max_epoch=200)
+                        eta=eta, max_epoch=max_epoch)
         super(LARS, self).__init__(params, defaults)
 
-    def __setstate__(self, state):
-        super(SGD, self).__setstate__(state)
-        for group in self.param_groups:
-            group.setdefault('nesterov', False)
-
-    def step(self, epoch, closure=None):
+    def step(self, epoch=None, closure=None):
         """Performs a single optimization step.
 
         Arguments:
             closure (callable, optional): A closure that reevaluates the model
                 and returns the loss.
-            epoch: current epoch to calculate polynomial LR decay schedule 
+            epoch: current epoch to calculate polynomial LR decay schedule.
+                   if None, uses self.epoch and increments it.
         """
         loss = None
         if closure is not None:
             loss = closure()
+
+        if epoch is None:
+            epoch = self.epoch
+            self.epoch += 1
 
         for group in self.param_groups:
             weight_decay = group['weight_decay']
@@ -77,16 +79,19 @@ class LARS(Optimizer):
                 grad_norm = torch.norm(d_p)
 
                 # Global LR computed on polynomial decay schedule
-                global_lr = lr * (1 - float(epoch) / max_epoch)
+                decay = (1 - float(epoch) / max_epoch) ** 2
+                global_lr = lr * decay
 
-                # Compute local learning rate
-                local_lr = eta * weight_norm / (grad_norm + weight_decay * weight_norm)
+                # Compute local learning rate for this layer
+                local_lr = eta * weight_norm / \
+                    (grad_norm + weight_decay * weight_norm)
 
                 # Update the momentum term
                 actual_lr = local_lr * global_lr
 
                 if 'momentum_buffer' not in param_state:
-                    buf = param_state['momentum_buffer'] = torch.zeros_like(p.data)
+                    buf = param_state['momentum_buffer'] = \
+                            torch.zeros_like(p.data)
                 else:
                     buf = param_state['momentum_buffer']
                 buf.mul_(momentum).add_(actual_lr, d_p + weight_decay * p.data)
