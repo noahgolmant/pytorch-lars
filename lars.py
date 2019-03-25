@@ -95,6 +95,6 @@ class LARS(Optimizer):
                 else:
                     buf = param_state['momentum_buffer']
                 buf.mul_(momentum).add_(actual_lr, d_p + weight_decay * p.data)
-                p.data.add_(buf)
+                p.data.add_(-buf)
 
         return loss
